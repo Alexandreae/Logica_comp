@@ -8,6 +8,9 @@ def separador(entrada):
 
     for char in entrada:
         if char == " ":
+            if not numero == "":
+                saida.append(numero)
+                numero = ""
             continue
         elif char.isnumeric() == True:
             numero += char
