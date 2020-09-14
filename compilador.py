@@ -8,17 +8,23 @@ class PrePro:
         numero = ""
         saida = []
         comment = False
-        for char in entrada:
+        skip = False
+        for i in range(len(entrada)):
+            char = entrada[i]
+            if skip == True:
+                skip = False
+                continue
             if comment == True:
-                if char == "#":
+                if char == "=" and entrada[i+1] == "#":
                     comment = False #fim do comentario
+                    skip = True
                     if not numero == "":
                         saida.append(numero)
                         numero = ""
                     continue
                 else:
                     continue
-            if char == "#": #começo do comentario
+            if char == "#" and entrada[i+1] == "=": #começo do comentario
                 comment = True
                 continue
 
@@ -76,7 +82,7 @@ class Tokenizer:
             self.atual = prox
             self.pos += 1
             return
-        elif lido == "x":
+        elif lido == "*":
             prox = Token("MULT",0)
             self.atual = prox
             self.pos += 1
