@@ -2,29 +2,44 @@ import sys
 
 argv = sys.argv[1:] #lista dos argumentos recebidos ao rodar o arquivo
 
-def separador(entrada):
-    numero = ""
-    saida = []
 
-    for char in entrada:
-        if char == " ":
-            if not numero == "":
-                saida.append(numero)
+class PrePro:
+    def filter(entrada):
+        numero = ""
+        saida = []
+        comment = False
+        for char in entrada:
+            if comment == True:
+                if char == "#":
+                    comment = False #fim do comentario
+                    if not numero == "":
+                        saida.append(numero)
+                        numero = ""
+                    continue
+                else:
+                    continue
+            if char == "#": #começo do comentario
+                comment = True
+                continue
+
+            if char == " ":
+                if not numero == "":
+                    saida.append(numero)
+                    numero = ""
+                continue
+            elif char.isnumeric() == True:
+                numero += char
+            else:
+                if not numero == "":
+                    saida.append(numero)
                 numero = ""
-            continue
-        elif char.isnumeric() == True:
-            numero += char
-        else:
-            if not numero == "":
-                saida.append(numero)
-            numero = ""
-            saida.append(char)
-            
-    if not numero == "":
-        saida.append(numero)
-    return saida
-
-
+                saida.append(char)
+                
+        if not numero == "":
+            saida.append(numero)
+        if comment == True:
+            raise Exception("Erro de gramática")
+        return saida
 
 class Token:
     def __init__(self,tipo,valor):
@@ -61,34 +76,94 @@ class Tokenizer:
             self.atual = prox
             self.pos += 1
             return
+        elif lido == "x":
+            prox = Token("MULT",0)
+            self.atual = prox
+            self.pos += 1
+            return
+        elif lido == "/":
+            prox = Token("DIV",0)
+            self.atual = prox
+            self.pos += 1
+            return
         else:
             raise Exception("Erro de gramática")
 
 class Parser:
-    def __init__(self,tokenizer):
-        self.tokenizer = tokenizer
-    
-    def parseExp(self):
-        self.tokenizer.selProx()
+    tokenizerNum = []
+    def __init__(self,tokenizerTerm):
+        self.tokenizerTerm = tokenizerTerm
+
+    def parseTerm(self):
+        self.tokenizerTerm.selProx()
+        listaNum = []
+        number = 0
+        if self.tokenizerTerm.atual.tipo == "INT":
+            number = self.tokenizerTerm.atual.valor
+            self.tokenizerTerm.selProx()
+        else:
+            raise Exception("Erro de sintaxe")
+        while self.tokenizerTerm.atual.tipo in ["PLUS","MINUS","MULT","DIV"]:
+            if self.tokenizerTerm.atual.tipo == "MULT":
+                self.tokenizerTerm.selProx()
+                if self.tokenizerTerm.atual.tipo == "INT":
+                    number = number * self.tokenizerTerm.atual.valor
+                else:
+                    raise Exception("Erro de sintaxe")
+
+            if self.tokenizerTerm.atual.tipo == "DIV":
+                self.tokenizerTerm.selProx()
+                if self.tokenizerTerm.atual.tipo == "INT":
+                    number = int(number / self.tokenizerTerm.atual.valor)
+                else:
+                    raise Exception("Erro de sintaxe")                
+
+            if self.tokenizerTerm.atual.tipo == "PLUS":
+                listaNum.append(str(number))
+                listaNum.append("+")
+                self.tokenizerTerm.selProx()
+                if self.tokenizerTerm.atual.tipo == "INT":
+                    number = self.tokenizerTerm.atual.valor
+                else:
+                    raise Exception("Erro de sintaxe")
+
+            if self.tokenizerTerm.atual.tipo == "MINUS":
+                listaNum.append(str(number))
+                listaNum.append("-")
+                self.tokenizerTerm.selProx()
+                if self.tokenizerTerm.atual.tipo == "INT":
+                    number = self.tokenizerTerm.atual.valor
+                else:
+                    raise Exception("Erro de sintaxe")
+            self.tokenizerTerm.selProx()
+        listaNum.append(str(number))
+        if self.tokenizerTerm.atual.tipo == "EOF":
+            return listaNum
+        else:
+            raise Exception("EOF não encontrado")
+
+        
+    def parseNum(self):
+        self.tokenizerNum.selProx()
         resultado = 0
-        if self.tokenizer.atual.tipo == "INT":
-            resultado = self.tokenizer.atual.valor
-            self.tokenizer.selProx()
-            while self.tokenizer.atual.tipo in ["PLUS","MINUS"]:
-                if self.tokenizer.atual.tipo == "PLUS":
-                    self.tokenizer.selProx()
-                    if self.tokenizer.atual.tipo == "INT":
-                        resultado += self.tokenizer.atual.valor
+        if self.tokenizerNum.atual.tipo == "INT":
+            resultado = self.tokenizerNum.atual.valor
+            self.tokenizerNum.selProx()
+            while self.tokenizerNum.atual.tipo in ["PLUS","MINUS"]:
+                if self.tokenizerNum.atual.tipo == "PLUS":
+                    self.tokenizerNum.selProx()
+                    if self.tokenizerNum.atual.tipo == "INT":
+                        resultado += self.tokenizerNum.atual.valor
                     else:
                         raise Exception("Erro de sintaxe")
-                if self.tokenizer.atual.tipo == "MINUS":
-                    self.tokenizer.selProx()
-                    if self.tokenizer.atual.tipo == "INT":
-                        resultado -= self.tokenizer.atual.valor
+                if self.tokenizerNum.atual.tipo == "MINUS":
+                    self.tokenizerNum.selProx()
+                    if self.tokenizerNum.atual.tipo == "INT":
+                        resultado -= self.tokenizerNum.atual.valor
                     else:
                         raise Exception("Erro de sintaxe")
-                self.tokenizer.selProx()
-            if self.tokenizer.atual.tipo == "EOF":
+                self.tokenizerNum.selProx()
+            if self.tokenizerNum.atual.tipo == "EOF":
                 return resultado
             else:  
                 raise Exception("EOF não encontrado")
@@ -96,10 +171,12 @@ class Parser:
             raise Exception("Erro de sintaxe")
 
     def run():
-        #print("Operação: " + str(separador(argv[0])))
-        tokenizer = Tokenizer(separador(argv[0]))
-        parser = Parser(tokenizer)
-        print(parser.parseExp())
+        tokenizerTerm = Tokenizer(PrePro.filter(argv[0]))
+        parser = Parser(tokenizerTerm)
+        tokenizerNum = Tokenizer(parser.parseTerm())
+        parser.tokenizerNum = tokenizerNum
+
+        print(parser.parseNum())
         return 
 
 
