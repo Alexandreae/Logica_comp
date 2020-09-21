@@ -5,6 +5,7 @@ argv = sys.argv[1:] #lista dos argumentos recebidos ao rodar o arquivo
 
 class PrePro:
     def filter(entrada):
+        parenteses = 0
         numero = ""
         saida = []
         comment = False
@@ -40,10 +41,16 @@ class PrePro:
                     saida.append(numero)
                 numero = ""
                 saida.append(char)
+            if char == "(":
+                parenteses += 1
+            if char == ")":
+                if parenteses == 0:
+                    raise Exception("Erro de gramática")
+                parenteses -= 1
                 
         if not numero == "":
             saida.append(numero)
-        if comment == True:
+        if comment == True or (not parenteses == 0):
             raise Exception("Erro de gramática")
         return saida
 
@@ -92,6 +99,16 @@ class Tokenizer:
             self.atual = prox
             self.pos += 1
             return
+        elif lido == "(":
+            prox = Token("OPEN",0)
+            self.atual = prox
+            self.pos += 1
+            return
+        elif lido == ")":
+            prox = Token("CLOSE",0)
+            self.atual = prox
+            self.pos += 1
+            return
         else:
             raise Exception("Erro de gramática")
 
@@ -100,10 +117,60 @@ class Parser:
     def __init__(self,tokenizerTerm):
         self.tokenizerTerm = tokenizerTerm
 
+    def parseExp(entrada):
+        parenteses = 0
+        par = False
+        lista = []
+        listaPar = []
+
+        for i in entrada:
+            if i == "(":
+                par = True
+                parenteses += 1
+                if parenteses == 1:
+                    continue
+                listaPar.append(i)
+
+            if i == ")":
+                parenteses += -1
+                if parenteses == 0:
+                    par = False
+                    numero = Parser.parseExp(listaPar)
+                    if numero < 0:
+                        lista.append("-")
+                        lista.append(str(numero))
+                    else:
+                        lista.append(str(numero))
+                    listaPar = []
+                    continue
+
+            if par == True:
+                listaPar.append(i)
+            else:
+                lista.append(i)
+
+        tokenizer = Tokenizer(lista)
+        parser = Parser(tokenizer)
+        tokenizer2 = Tokenizer(parser.parseTerm())
+        parser.tokenizerNum = tokenizer2
+        return parser.parseNum()
+
+
+
+
+
+
     def parseTerm(self):
         self.tokenizerTerm.selProx()
         listaNum = []
         number = 0
+        while self.tokenizerTerm.atual.tipo in ["PLUS","MINUS"]:
+            if self.tokenizerTerm.atual.tipo == "PLUS":
+                listaNum.append("+")
+            else:
+                listaNum.append("-")
+            self.tokenizerTerm.selProx()
+
         if self.tokenizerTerm.atual.tipo == "INT":
             number = self.tokenizerTerm.atual.valor
             self.tokenizerTerm.selProx()
@@ -152,8 +219,21 @@ class Parser:
     def parseNum(self):
         self.tokenizerNum.selProx()
         resultado = 0
+        negativo = False
+
+        while self.tokenizerNum.atual.tipo in ["PLUS","MINUS"]:
+            if self.tokenizerNum.atual.tipo == "MINUS":
+                if negativo == True:
+                    negativo = False
+                else:
+                    negativo = True
+            self.tokenizerNum.selProx()
+
         if self.tokenizerNum.atual.tipo == "INT":
-            resultado = self.tokenizerNum.atual.valor
+            if negativo == False:
+                resultado = self.tokenizerNum.atual.valor
+            else:
+                resultado = -self.tokenizerNum.atual.valor
             self.tokenizerNum.selProx()
             while self.tokenizerNum.atual.tipo in ["PLUS","MINUS"]:
                 if self.tokenizerNum.atual.tipo == "PLUS":
@@ -177,12 +257,7 @@ class Parser:
             raise Exception("Erro de sintaxe")
 
     def run():
-        tokenizerTerm = Tokenizer(PrePro.filter(argv[0]))
-        parser = Parser(tokenizerTerm)
-        tokenizerNum = Tokenizer(parser.parseTerm())
-        parser.tokenizerNum = tokenizerNum
-
-        print(parser.parseNum())
+        print(Parser.parseExp(PrePro.filter(argv[0])))
         return 
 
 
