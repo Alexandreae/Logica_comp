@@ -5,6 +5,7 @@ argv = sys.argv[1:] #lista dos argumentos recebidos ao rodar o arquivo
 
 class PrePro:
     def filter(entrada):
+        parenteses = 0
         numero = ""
         saida = []
         comment = False
@@ -35,6 +36,12 @@ class PrePro:
                 continue
             elif char.isnumeric() == True:
                 numero += char
+            elif char == "(":
+                parenteses += 1
+            elif char == ")":
+                if parenteses == 0:
+                    raise Exception("Erro de gramática")
+                parenteses -= 1
             else:
                 if not numero == "":
                     saida.append(numero)
@@ -43,7 +50,7 @@ class PrePro:
                 
         if not numero == "":
             saida.append(numero)
-        if comment == True:
+        if comment == True or (not parenteses == 0):
             raise Exception("Erro de gramática")
         return saida
 
@@ -104,6 +111,13 @@ class Parser:
         self.tokenizerTerm.selProx()
         listaNum = []
         number = 0
+        while self.tokenizerTerm.atual.tipo in ["PLUS","MINUS"]:
+            if self.tokenizerTerm.atual.tipo == "PLUS":
+                listaNum.append("+")
+            else:
+                listaNum.append("-")
+            self.tokenizerTerm.selProx()
+
         if self.tokenizerTerm.atual.tipo == "INT":
             number = self.tokenizerTerm.atual.valor
             self.tokenizerTerm.selProx()
@@ -152,8 +166,21 @@ class Parser:
     def parseNum(self):
         self.tokenizerNum.selProx()
         resultado = 0
+        negativo = False
+
+        while self.tokenizerNum.atual.tipo in ["PLUS","MINUS"]:
+            if self.tokenizerNum.atual.tipo == "MINUS":
+                if negativo == True:
+                    negativo = False
+                else:
+                    negativo = True
+            self.tokenizerNum.selProx()
+
         if self.tokenizerNum.atual.tipo == "INT":
-            resultado = self.tokenizerNum.atual.valor
+            if negativo == False:
+                resultado = self.tokenizerNum.atual.valor
+            else:
+                resultado = -self.tokenizerNum.atual.valor
             self.tokenizerNum.selProx()
             while self.tokenizerNum.atual.tipo in ["PLUS","MINUS"]:
                 if self.tokenizerNum.atual.tipo == "PLUS":
