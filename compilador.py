@@ -68,7 +68,7 @@ class Tokenizer:
     
     def selProx(self):
         if len(self.origem) == (self.pos):
-            prox = Token("EOF","eof")
+            prox = Token("EOF",0)
             self.atual = prox
             return
 
@@ -119,17 +119,10 @@ class Parser:
         while Parser.tokenizer.atual.tipo in ["PLUS","MINUS"]:
             if Parser.tokenizer.atual.tipo == "PLUS":
                 Parser.tokenizer.selProx()
-<<<<<<< HEAD
-                result += Parser.parseTerm()
-            elif Parser.tokenizer.atual.tipo == "MINUS":
-                Parser.tokenizer.selProx()
-                result -= Parser.parseTerm()
-=======
                 result = BinOp("+",[result,Parser.parseTerm()])
             elif Parser.tokenizer.atual.tipo == "MINUS":
                 Parser.tokenizer.selProx()
                 result = BinOp("-",[result,Parser.parseTerm()])
->>>>>>> v2.0
         return result
 
     def parseTerm():
@@ -137,32 +130,16 @@ class Parser:
         while Parser.tokenizer.atual.tipo in ["MULT","DIV"]:
             if Parser.tokenizer.atual.tipo == "MULT":
                 Parser.tokenizer.selProx()
-<<<<<<< HEAD
-                result = result * Parser.parseFactor()
-            elif Parser.tokenizer.atual.tipo == "DIV":
-                Parser.tokenizer.selProx()
-                result = result // Parser.parseFactor()
-=======
                 result = BinOp("*",[result,Parser.parseFactor()])
             elif Parser.tokenizer.atual.tipo == "DIV":
                 Parser.tokenizer.selProx()
                 result = BinOp("/",[result,Parser.parseFactor()])
->>>>>>> v2.0
         return result
     
     def parseFactor():
         if Parser.tokenizer.atual.tipo == "INT":
             result = Parser.tokenizer.atual.valor
             Parser.tokenizer.selProx()
-<<<<<<< HEAD
-            return result
-        elif Parser.tokenizer.atual.tipo == "PLUS":
-            Parser.tokenizer.selProx()
-            return Parser.parseFactor()
-        elif Parser.tokenizer.atual.tipo == "MINUS":
-            Parser.tokenizer.selProx()
-            return -(Parser.parseFactor())
-=======
             return IntVal(result,[])
         elif Parser.tokenizer.atual.tipo == "PLUS":
             Parser.tokenizer.selProx()
@@ -170,7 +147,6 @@ class Parser:
         elif Parser.tokenizer.atual.tipo == "MINUS":
             Parser.tokenizer.selProx()
             return UnOp("-",[Parser.parseFactor()])
->>>>>>> v2.0
         elif Parser.tokenizer.atual.tipo == "OPEN":
             Parser.tokenizer.selProx()
             result = Parser.parseExp()
@@ -183,25 +159,13 @@ class Parser:
             raise Exception("Erro de sintaxe")
 
     def run():
-<<<<<<< HEAD
-        Parser.tokenizer = Tokenizer(PrePro.filter(argv[0]))
-=======
         arquivo = open("file.jl","r")
         arquivo.seek(0)
         Parser.tokenizer = Tokenizer(PrePro.filter(arquivo.readline()))
->>>>>>> v2.0
         Parser.tokenizer.selProx()
         result = Parser.parseExp()
         if Parser.tokenizer.atual.tipo == "EOF":
             return result
-<<<<<<< HEAD
-        else:
-            raise Exception("Erro de sintaxe")
-                 
-
-def main():
-    print(Parser.run())
-=======
         else:
             raise Exception("Erro de sintaxe")
                  
@@ -244,7 +208,6 @@ class NoOp(Node):
 
 def main():
     print(Parser.run().Evaluate())
->>>>>>> v2.0
     return
 
 if __name__ == "__main__":
