@@ -159,7 +159,7 @@ class Parser:
             raise Exception("Erro de sintaxe")
 
     def run():
-        arquivo = open("file.jl","r")
+        arquivo = open(argv[0],"r")
         arquivo.seek(0)
         Parser.tokenizer = Tokenizer(PrePro.filter(arquivo.readline()))
         Parser.tokenizer.selProx()
