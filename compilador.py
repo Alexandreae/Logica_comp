@@ -5,6 +5,7 @@ class PrePro:
     def filter(entrada):
         parenteses = 0
         numero = ""
+        numero2 = ""
         saida = []
         comment = False
         skip = False
@@ -34,19 +35,25 @@ class PrePro:
                     raise Exception("Erro de gramática")
                 parenteses -= 1
 
-
             if char == " ":
                 if not numero == "":
                     saida.append(numero)
                     numero = ""
                 continue
             elif char.isnumeric() or char.isalpha() or char == "_":
-                numero += char
+                numero += char    
             else:
                 if not numero == "":
                     saida.append(numero)
                 numero = ""
-                saida.append(char)
+                if char == "&" or char == "|" or char == "=":
+                    numero2 += char
+                    if entrada[i+1] == "&" or entrada[i+1] == "|" or entrada[i+1] == "=":
+                        continue
+                    saida.append(numero2)
+                    numero2 = ""
+                else:
+                    saida.append(char)
 
                 
         if not numero == "":
@@ -118,6 +125,30 @@ class Tokenizer:
             prox = Token("PRINT",lido)
             self.atual = prox
             self.pos +=1
+        elif lido == "readline":
+            prox = Token("READ",lido)
+            self.atual = prox
+            self.pos +=1
+        elif lido == "while":
+            prox = Token("WHILE",lido)
+            self.atual = prox
+            self.pos +=1
+        elif lido == "if":
+            prox = Token("IF",lido)
+            self.atual = prox
+            self.pos +=1
+        elif lido == "elseif":
+            prox = Token("ELSEIF",lido)
+            self.atual = prox
+            self.pos +=1
+        elif lido == "else":
+            prox = Token("ELSE",lido)
+            self.atual = prox
+            self.pos +=1
+        elif lido == "end":
+            prox = Token("END",lido)
+            self.atual = prox
+            self.pos +=1
         elif lido[0].isalpha():
             for i in lido:
                 if i.isnumeric() or i.isalpha() or i == "_":
@@ -131,23 +162,72 @@ class Tokenizer:
             prox = Token("ENTER",lido)
             self.atual = prox
             self.pos += 1
+        elif lido == "&&":
+            prox = Token("AND",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "||":
+            prox = Token("OR",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "!":
+            prox = Token("NOT",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "==":
+            prox = Token("COMPARE",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == ">":
+            prox = Token("BIGGER",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "<":
+            prox = Token("SMALLER",lido)
+            self.atual = prox
+            self.pos += 1
         else:
             raise Exception("Erro de gramática")
 
 class Parser:
     st = {}
-    def parseBlock():
-        while not Parser.tokenizer.atual.tipo == "EOF":
-            Parser.parseCommand()
+
+    def loopif():
+        Parser.tokenizer.selProx()
+        condition = Parser.parseRelExp()
+        block = Parser.parseBlock()
+        block2 = NoOp(0,0)
+        if Parser.tokenizer.atual.tipo == "ELSEIF":
+            block2 = Parser.loopif()
+        if Parser.tokenizer.atual.tipo == "ELSE":
             Parser.tokenizer.selProx()
-        return NoOp(0,0)
+            block2 = Parser.parseBlock()
+        result = IfOp("if",[condition,block,block2])
+        return result
+
+    def parseBlock():
+        filhos = []
+        while not Parser.tokenizer.atual.tipo in ["EOF","END","ELSE","ELSEIF"]:
+            filhos.append(Parser.parseCommand())
+            Parser.tokenizer.selProx()
+        return Statements(0,filhos)
     def parseCommand():
+        result = ""
         if Parser.tokenizer.atual.tipo == "IDEN":
             identifier = Parser.tokenizer.atual.valor
             Parser.tokenizer.selProx()
             if Parser.tokenizer.atual.tipo == "EQUAL":
                 Parser.tokenizer.selProx()
-                Parser.st[identifier] = Parser.parseExp().Evaluate()
+                if Parser.tokenizer.atual.tipo == "READ":
+                    Parser.tokenizer.selProx()
+                    if Parser.tokenizer.atual.tipo == "OPEN":
+                        Parser.tokenizer.selProx()
+                    if Parser.tokenizer.atual.tipo == "CLOSE":
+                        readline = NoOp("readline",[])
+                        result = BinOp("=",[identifier,readline])
+                        Parser.tokenizer.selProx()
+                else:
+                    result = BinOp("=",[identifier,Parser.parseRelExp()])
             else:
                 raise Exception("Erro de sintaxe")
 
@@ -157,37 +237,75 @@ class Parser:
                 raise Exception("Erro de sintaxe")
             else:
                 Parser.tokenizer.selProx()
-            result = Parser.parseExp().Evaluate()
-            print(result)
+            
+            valor = Parser.parseRelExp()
+            result = UnOp("println",[valor])
             Parser.tokenizer.selProx()
             if Parser.tokenizer.atual.tipo == "CLOSE":
                 Parser.tokenizer.selProx()
+        
+        elif Parser.tokenizer.atual.tipo == "WHILE":
+            Parser.tokenizer.selProx()
+            condition = Parser.parseRelExp()
+            block = Parser.parseBlock()
+            result = BinOp("while",[condition,block])
+            if not Parser.tokenizer.atual.tipo == "END":
+                raise Exception("Erro de sintaxe")
+            Parser.tokenizer.selProx()
+
+        elif Parser.tokenizer.atual.tipo == "IF":
+            result = Parser.loopif()
+            if not Parser.tokenizer.atual.tipo == "END":
+                raise Exception("Erro de sintaxe")
+            Parser.tokenizer.selProx()
+
         if Parser.tokenizer.atual.tipo in ["ENTER","EOF"]:
-            return
+            if result == "":
+                result = NoOp(0,0)
+            return result
         else:
             raise Exception("Erro de sintaxe")
 
+    def parseRelExp():
+        result = Parser.parseExp()
+        while Parser.tokenizer.atual.tipo in ["COMPARE","BIGGER","SMALLER"]:
+            if Parser.tokenizer.atual.tipo == "COMPARE":
+                Parser.tokenizer.selProx()
+                result = BinOp("==",[result,Parser.parseExp()])
+            elif Parser.tokenizer.atual.tipo == "BIGGER":
+                Parser.tokenizer.selProx()
+                result = BinOp(">",[result,Parser.parseExp()])
+            elif Parser.tokenizer.atual.tipo == "SMALLER":
+                Parser.tokenizer.selProx()
+                result = BinOp("<",[result,Parser.parseExp()])
+        return result
 
     def parseExp():
         result = Parser.parseTerm()
-        while Parser.tokenizer.atual.tipo in ["PLUS","MINUS"]:
+        while Parser.tokenizer.atual.tipo in ["PLUS","MINUS","OR"]:
             if Parser.tokenizer.atual.tipo == "PLUS":
                 Parser.tokenizer.selProx()
                 result = BinOp("+",[result,Parser.parseTerm()])
             elif Parser.tokenizer.atual.tipo == "MINUS":
                 Parser.tokenizer.selProx()
                 result = BinOp("-",[result,Parser.parseTerm()])
+            elif Parser.tokenizer.atual.tipo == "OR":
+                Parser.tokenizer.selProx()
+                result = BinOp("||",[result,Parser.parseTerm()])
         return result
 
     def parseTerm():
         result = Parser.parseFactor()
-        while Parser.tokenizer.atual.tipo in ["MULT","DIV"]:
+        while Parser.tokenizer.atual.tipo in ["MULT","DIV","AND"]:
             if Parser.tokenizer.atual.tipo == "MULT":
                 Parser.tokenizer.selProx()
                 result = BinOp("*",[result,Parser.parseFactor()])
             elif Parser.tokenizer.atual.tipo == "DIV":
                 Parser.tokenizer.selProx()
                 result = BinOp("/",[result,Parser.parseFactor()])
+            elif Parser.tokenizer.atual.tipo == "AND":
+                Parser.tokenizer.selProx()
+                result = BinOp("&&",[result,Parser.parseFactor()])
         return result
     
     def parseFactor():
@@ -201,9 +319,12 @@ class Parser:
         elif Parser.tokenizer.atual.tipo == "MINUS":
             Parser.tokenizer.selProx()
             return UnOp("-",[Parser.parseFactor()])
+        elif Parser.tokenizer.atual.tipo == "NOT":
+            Parser.tokenizer.selProx()
+            return UnOp("!",[Parser.parseFactor()])
         elif Parser.tokenizer.atual.tipo == "OPEN":
             Parser.tokenizer.selProx()
-            result = Parser.parseExp()
+            result = Parser.parseRelExp()
             if Parser.tokenizer.atual.tipo == "CLOSE":
                 Parser.tokenizer.selProx()
                 return result
@@ -211,11 +332,9 @@ class Parser:
                 raise Exception("Erro de sintaxe")
         elif Parser.tokenizer.atual.tipo == "IDEN":
             identifier = Parser.tokenizer.atual.valor
-            if not identifier in Parser.st:
-                raise Exception("Erro de sintaxe")
-            result = Parser.st[identifier]
+            result = Identifier(identifier,[])
             Parser.tokenizer.selProx()
-            return IntVal(result,[])
+            return result
         else:
             raise Exception("Erro de sintaxe")
 
@@ -250,6 +369,23 @@ class BinOp(Node):
             return self.children[0].Evaluate() * self.children[1].Evaluate()
         elif self.value == "/":
             return self.children[0].Evaluate() // self.children[1].Evaluate()
+        elif self.value == "=":
+            Parser.st[self.children[0]] = self.children[1].Evaluate()
+            return
+        elif self.value == "&&":
+            return self.children[0].Evaluate() and self.children[1].Evaluate()
+        elif self.value == "||":
+            return self.children[0].Evaluate() or self.children[1].Evaluate()
+        elif self.value == "==":
+            return self.children[0].Evaluate() == self.children[1].Evaluate()
+        elif self.value == ">":
+            return self.children[0].Evaluate() > self.children[1].Evaluate()
+        elif self.value == "<":
+            return self.children[0].Evaluate() < self.children[1].Evaluate()
+        elif self.value == "while":
+            while self.children[0].Evaluate():
+                self.children[1].Evaluate()
+            return
         else:
             raise Exception("Erro de sintaxe")
 
@@ -257,8 +393,15 @@ class UnOp(Node):
     def Evaluate(self):
         if self.value == "-":
             return -(self.children[0].Evaluate())
-        else:
+        elif self.value == "+":
             return self.children[0].Evaluate()
+        elif self.value == "println":
+            print(self.children[0].Evaluate())
+            return
+        elif self.value == "!":
+            return not self.children[0].Evaluate()
+        else:
+            raise Exception("Erro de sintaxe")
 
 
 class IntVal(Node):
@@ -267,7 +410,27 @@ class IntVal(Node):
 
 class NoOp(Node):
     def Evaluate(self):
+        if self.value == "readline":
+            return int(input())
         pass
+
+class Statements(Node):
+    def Evaluate(self):
+        for filho in self.children:
+            filho.Evaluate()
+        return
+
+class Identifier(Node):
+    def Evaluate(self):
+        return Parser.st[self.value]
+
+class IfOp(Node):
+    def Evaluate(self):
+        if self.children[0].Evaluate():
+            self.children[1].Evaluate()
+        else:
+            self.children[2].Evaluate()
+        return
 
 def main():
     Parser.run().Evaluate()
