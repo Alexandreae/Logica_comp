@@ -8,26 +8,45 @@ class PrePro:
         numero2 = ""
         saida = []
         comment = False
+        string = False
         skip = False
         for i in range(len(entrada)):
             char = entrada[i]
             if skip == True:
                 skip = False
                 continue
-            if comment == True:
-                if char == "=" and entrada[i+1] == "#":
+            if char == "=" and entrada[i+1] == "#":
+                if comment:
                     comment = False #fim do comentario
                     skip = True
                     if not numero == "":
                         saida.append(numero)
                         numero = ""
                     continue
+                elif string:
+                    pass
                 else:
-                    continue
+                    raise Exception("Erro de gramática")
+
+            if string and (not char == '"'):
+                numero += char
+                continue
+
             if char == "#" and entrada[i+1] == "=": #começo do comentario
                 comment = True
                 continue
             
+            if char == '"':
+                if not string:
+                    string = True
+                    numero += char
+                    continue
+                else:
+                    string = False
+                    saida.append(numero)
+                    numero = ""
+                    continue
+
             if char == "(":
                 parenteses += 1
             if char == ")":
@@ -46,9 +65,9 @@ class PrePro:
                 if not numero == "":
                     saida.append(numero)
                 numero = ""
-                if char == "&" or char == "|" or char == "=":
+                if char == "&" or char == "|" or char == "=" or char == ":":
                     numero2 += char
-                    if entrada[i+1] == "&" or entrada[i+1] == "|" or entrada[i+1] == "=":
+                    if entrada[i+1] == "&" or entrada[i+1] == "|" or entrada[i+1] == "=" or entrada[i+1] == ":":
                         continue
                     saida.append(numero2)
                     numero2 = ""
@@ -149,6 +168,30 @@ class Tokenizer:
             prox = Token("END",lido)
             self.atual = prox
             self.pos +=1
+        elif lido == "local":
+            prox = Token("LOCAL",lido)
+            self.atual = prox
+            self.pos +=1
+        elif lido == "Int":
+            prox = Token("INTVAR",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "Bool":
+            prox = Token("BOOLVAR",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "String":
+            prox = Token("STRINGVAR",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "true":
+            prox = Token("TRUE",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "false":
+            prox = Token("FALSE",lido)
+            self.atual = prox
+            self.pos += 1
         elif lido[0].isalpha():
             for i in lido:
                 if i.isnumeric() or i.isalpha() or i == "_":
@@ -158,6 +201,12 @@ class Tokenizer:
             prox = Token("IDEN",lido)
             self.atual = prox
             self.pos += 1
+
+        elif lido[0] == '"':
+            lido = lido.replace('"','')
+            prox = Token("STR",lido)
+            self.atual = prox
+            self.pos +=1
         elif lido == "\n":
             prox = Token("ENTER",lido)
             self.atual = prox
@@ -168,6 +217,10 @@ class Tokenizer:
             self.pos += 1
         elif lido == "||":
             prox = Token("OR",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "::":
+            prox = Token("EQUALVAR",lido)
             self.atual = prox
             self.pos += 1
         elif lido == "!":
@@ -259,6 +312,18 @@ class Parser:
                 raise Exception("Erro de sintaxe")
             Parser.tokenizer.selProx()
 
+        elif Parser.tokenizer.atual.tipo == "LOCAL":
+            Parser.tokenizer.selProx()
+            if Parser.tokenizer.atual.tipo == "IDEN":
+                identifier = Parser.tokenizer.atual.valor
+                Parser.tokenizer.selProx()
+                if Parser.tokenizer.atual.tipo == "EQUALVAR":
+                    Parser.tokenizer.selProx()
+                    if Parser.tokenizer.atual.tipo in ["INTVAR","BOOLVAR","STRINGVAR"]:
+                        valor = Parser.tokenizer.atual.valor
+                        result = BinOp("::",[identifier,valor])
+                        Parser.tokenizer.selProx()
+
         if Parser.tokenizer.atual.tipo in ["ENTER","EOF"]:
             if result == "":
                 result = NoOp(0,0)
@@ -313,6 +378,18 @@ class Parser:
             result = Parser.tokenizer.atual.valor
             Parser.tokenizer.selProx()
             return IntVal(result,[])
+        elif Parser.tokenizer.atual.tipo == "STR":
+            result = Parser.tokenizer.atual.valor
+            Parser.tokenizer.selProx()
+            return StrVal(result,[])
+        elif Parser.tokenizer.atual.tipo == "TRUE":
+            result = Parser.tokenizer.atual.valor
+            Parser.tokenizer.selProx()
+            return BoolVal(True,[])
+        elif Parser.tokenizer.atual.tipo == "FALSE":
+            result = Parser.tokenizer.atual.valor
+            Parser.tokenizer.selProx()
+            return BoolVal(False,[])
         elif Parser.tokenizer.atual.tipo == "PLUS":
             Parser.tokenizer.selProx()
             return UnOp("+",[Parser.parseFactor()])
@@ -366,11 +443,38 @@ class BinOp(Node):
         elif self.value == "-":
             return self.children[0].Evaluate() - self.children[1].Evaluate()
         elif self.value == "*":
-            return self.children[0].Evaluate() * self.children[1].Evaluate()
+            eval0 = self.children[0].Evaluate()
+            eval1 = self.children[1].Evaluate()
+            if type(eval0) == type("string") or type(eval1) == type("string"):
+                if eval0 == True:
+                    eval0 = "true"
+                elif eval0 == False:
+                    eval0 = "false"
+                if eval1 == True:
+                    eval1 = "true"
+                elif eval1 == False:
+                    eval1 = "false"
+                return str(eval0) + str(eval1)
+            return eval0 * eval1
         elif self.value == "/":
             return self.children[0].Evaluate() // self.children[1].Evaluate()
         elif self.value == "=":
-            Parser.st[self.children[0]] = self.children[1].Evaluate()
+            valor = self.children[1].Evaluate()
+            if not (type(Parser.st[self.children[0]][1]) == type(valor)):
+                raise Exception("Variável não é do tipo especificado")
+            Parser.st[self.children[0]][0] = valor
+            return
+        elif self.value == "::":
+            valor = None
+            if self.children[1] == "Int":
+                valor = 1
+            elif self.children[1] == "Bool":
+                valor = True
+            elif self.children[1] == "String":
+                valor = "string"
+            else:
+                raise Exception("Tipo de variável desconhecido")
+            Parser.st[self.children[0]] = [None,valor]
             return
         elif self.value == "&&":
             return self.children[0].Evaluate() and self.children[1].Evaluate()
@@ -408,6 +512,14 @@ class IntVal(Node):
     def Evaluate(self):
         return self.value
 
+class StrVal(Node):
+    def Evaluate(self):
+        return self.value
+
+class BoolVal(Node):
+    def Evaluate(self):
+        return self.value
+
 class NoOp(Node):
     def Evaluate(self):
         if self.value == "readline":
@@ -422,7 +534,7 @@ class Statements(Node):
 
 class Identifier(Node):
     def Evaluate(self):
-        return Parser.st[self.value]
+        return Parser.st[self.value][0]
 
 class IfOp(Node):
     def Evaluate(self):
