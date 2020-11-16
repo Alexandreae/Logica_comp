@@ -1,4 +1,5 @@
 import sys
+from shutil import copyfile
 
 argv = sys.argv[1:] #lista dos argumentos recebidos ao rodar o arquivo
 class PrePro:
@@ -244,6 +245,8 @@ class Tokenizer:
 
 class Parser:
     st = {}
+    valCount = 1
+    loopCount = 1
 
     def loopif():
         Parser.tokenizer.selProx()
@@ -439,31 +442,46 @@ class Node:
 class BinOp(Node):
     def Evaluate(self):
         if self.value == "+":
-            return self.children[0].Evaluate() + self.children[1].Evaluate()
-        elif self.value == "-":
-            return self.children[0].Evaluate() - self.children[1].Evaluate()
-        elif self.value == "*":
-            eval0 = self.children[0].Evaluate()
-            eval1 = self.children[1].Evaluate()
-            if type(eval0) == type("string") or type(eval1) == type("string"):
-                if eval0 == True:
-                    eval0 = "true"
-                elif eval0 == False:
-                    eval0 = "false"
-                if eval1 == True:
-                    eval1 = "true"
-                elif eval1 == False:
-                    eval1 = "false"
-                return str(eval0) + str(eval1)
-            return eval0 * eval1
-        elif self.value == "/":
-            return self.children[0].Evaluate() // self.children[1].Evaluate()
-        elif self.value == "=":
-            valor = self.children[1].Evaluate()
-            if not (type(Parser.st[self.children[0]][1]) == type(valor)):
-                raise Exception("Variável não é do tipo especificado")
-            Parser.st[self.children[0]][0] = valor
+            self.children[0].Evaluate()
+            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
+            self.children[1].Evaluate()
+            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
+            Generator.lista.append("ADD EAX, EBX ; BinOp soma")
+            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
             return
+
+        elif self.value == "-":
+            self.children[0].Evaluate()
+            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
+            self.children[1].Evaluate()
+            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
+            Generator.lista.append("SUB EAX, EBX ; BinOp subtracao")
+            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
+            return
+
+        elif self.value == "*":
+            self.children[0].Evaluate()
+            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
+            self.children[1].Evaluate()
+            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
+            Generator.lista.append("IMUL EAX, EBX ; BinOp multiplicacao")
+            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
+            return
+
+        elif self.value == "/":
+            self.children[0].Evaluate()
+            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
+            self.children[1].Evaluate()
+            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
+            Generator.lista.append("DIVSD EAX, EBX ; BinOp divisao")
+            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
+            return
+
+        elif self.value == "=":
+            self.children[1].Evaluate()
+            Generator.lista.append("MOV [EBP-" + str(Parser.st[self.children[0]][2]*4) + "], EBX ; salva resultado em EBX")
+            return
+
         elif self.value == "::":
             valor = None
             if self.children[1] == "Int":
@@ -474,21 +492,65 @@ class BinOp(Node):
                 valor = "string"
             else:
                 raise Exception("Tipo de variável desconhecido")
-            Parser.st[self.children[0]] = [None,valor]
+            Parser.st[self.children[0]] = [None,valor,Parser.valCount]
+            Parser.valCount += 1
+            Generator.lista.append("PUSH DWORD 0 ; alocacao " + self.children[0])
             return
+
         elif self.value == "&&":
-            return self.children[0].Evaluate() and self.children[1].Evaluate()
+            self.children[0].Evaluate()
+            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
+            self.children[1].Evaluate()
+            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
+            Generator.lista.append("AND EAX, EBX ; BinOp and")
+            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
+            return
+
         elif self.value == "||":
-            return self.children[0].Evaluate() or self.children[1].Evaluate()
+            self.children[0].Evaluate()
+            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
+            self.children[1].Evaluate()
+            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
+            Generator.lista.append("OR EAX, EBX ; BinOp or")
+            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
+            return
+
         elif self.value == "==":
-            return self.children[0].Evaluate() == self.children[1].Evaluate()
+            self.children[0].Evaluate()
+            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
+            self.children[1].Evaluate()
+            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
+            Generator.lista.append("CMP EAX, EBX ; BinOp ==")
+            Generator.lista.append("CALL binop_je")
+
         elif self.value == ">":
-            return self.children[0].Evaluate() > self.children[1].Evaluate()
+            self.children[0].Evaluate()
+            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
+            self.children[1].Evaluate()
+            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
+            Generator.lista.append("CMP EAX, EBX ; BinOp greater")
+            Generator.lista.append("CALL binop_jg")
+
         elif self.value == "<":
-            return self.children[0].Evaluate() < self.children[1].Evaluate()
+            self.children[0].Evaluate()
+            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
+            self.children[1].Evaluate()
+            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
+            Generator.lista.append("CMP EAX, EBX ; BinOp lesser")
+            Generator.lista.append("CALL binop_jl")
+
         elif self.value == "while":
-            while self.children[0].Evaluate():
-                self.children[1].Evaluate()
+            #lembrar de fazer cmp ebx false
+            #e je exit_numero
+            contador = Parser.loopCount
+            Generator.lista.append("LOOP_" + str(contador))
+            Parser.loopCount += 1
+            self.children[0].Evaluate()
+            Generator.lista.append("CMP EBX, FALSE")
+            Generator.lista.append("JE EXIT_" + str(contador))
+            self.children[1].Evaluate()
+            Generator.lista.append("JMP LOOP_" + str(contador))
+            Generator.lista.append("EXIT_" + str(contador))
             return
         else:
             raise Exception("Erro de sintaxe")
@@ -497,11 +559,18 @@ class UnOp(Node):
     def Evaluate(self):
         if self.value == "-":
             return -(self.children[0].Evaluate())
+
         elif self.value == "+":
             return self.children[0].Evaluate()
+
         elif self.value == "println":
-            print(self.children[0].Evaluate())
+            self.children[0].Evaluate()
+            Generator.lista.append("PUSH EBX")
+            Generator.lista.append("CALL print")
+            Generator.lista.append("POP EBX")
+            #print(self.children[0].Evaluate())
             return
+
         elif self.value == "!":
             return not self.children[0].Evaluate()
         else:
@@ -510,7 +579,9 @@ class UnOp(Node):
 
 class IntVal(Node):
     def Evaluate(self):
-        return self.value
+        result = self.value
+        Generator.lista.append("MOV EBX, " + str(result) + " ; IntVal")
+        return result
 
 class StrVal(Node):
     def Evaluate(self):
@@ -518,7 +589,9 @@ class StrVal(Node):
 
 class BoolVal(Node):
     def Evaluate(self):
-        return self.value
+        result = self.value
+        Generator.lista.append("MOV EBX, " + str(result) + " ; BoolVal")
+        return result
 
 class NoOp(Node):
     def Evaluate(self):
@@ -534,18 +607,38 @@ class Statements(Node):
 
 class Identifier(Node):
     def Evaluate(self):
-        return Parser.st[self.value][0]
+        result = Parser.st[self.value][0]
+        Generator.lista.append("MOV EBX, [EBP-" + str(Parser.st[self.value][2]*4) + "] ; Identifier " + self.value)
+        return result
 
 class IfOp(Node):
     def Evaluate(self):
-        if self.children[0].Evaluate():
-            self.children[1].Evaluate()
-        else:
-            self.children[2].Evaluate()
+        contador = Parser.loopCount
+        Generator.lista.append("IF_" + str(contador))
+        Parser.loopCount += 1
+        self.children[0].Evaluate()
+        Generator.lista.append("CMP EBX, FALSE")
+        Generator.lista.append("JE ELSE_" + str(contador))
+        self.children[1].Evaluate()
+        Generator.lista.append("ELSE_" + str(contador))
+        self.children[2].Evaluate()
+        return
+
+class Generator:
+    lista = []
+    def Run():
+        copyfile("predefs.txt","program.asm")
+        f = open("program.asm","a")
+        
+        for i in Generator.lista:
+            f.write(i+"\n")
+        f.close()
         return
 
 def main():
     Parser.run().Evaluate()
+    Generator.Run()
+
     return
 
 if __name__ == "__main__":
