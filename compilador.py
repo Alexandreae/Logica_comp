@@ -192,6 +192,14 @@ class Tokenizer:
             prox = Token("FALSE",lido)
             self.atual = prox
             self.pos += 1
+        elif lido == "function":
+            prox = Token("FUNCTION",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "return":
+            prox = Token("RETURN",lido)
+            self.atual = prox
+            self.pos += 1
         elif lido[0].isalpha():
             for i in lido:
                 if i.isnumeric() or i.isalpha() or i == "_":
@@ -239,11 +247,17 @@ class Tokenizer:
             prox = Token("SMALLER",lido)
             self.atual = prox
             self.pos += 1
+        elif lido == ",":
+            prox = Token("VIRGULA",lido)
+            self.atual = prox
+            self.pos += 1
         else:
             raise Exception("Erro de gramática")
 
 class Parser:
     st = {}
+    st["function"] = None
+    st2 = {}
 
     def loopif():
         Parser.tokenizer.selProx()
@@ -261,8 +275,69 @@ class Parser:
     def parseBlock():
         filhos = []
         while not Parser.tokenizer.atual.tipo in ["EOF","END","ELSE","ELSEIF"]:
-            filhos.append(Parser.parseCommand())
-            Parser.tokenizer.selProx()
+            if not Parser.tokenizer.atual.tipo == "FUNCTION":
+                filhos.append(Parser.parseCommand())
+                Parser.tokenizer.selProx()
+            else:
+                Parser.tokenizer.selProx()
+                if Parser.tokenizer.atual.tipo == "IDEN":
+                    identifier = Parser.tokenizer.atual.valor                    
+                    if identifier in Parser.st:
+                        raise Exception("Nome em uso")
+                    Parser.tokenizer.selProx()
+                    if Parser.tokenizer.atual.tipo == "OPEN":
+                        Parser.tokenizer.selProx()
+                        filhosfunc = []
+                        while not Parser.tokenizer.atual.tipo == "CLOSE":
+                            iden = Parser.tokenizer.atual.valor
+                            Parser.tokenizer.selProx()
+                            if not Parser.tokenizer.atual.tipo == "EQUALVAR":
+                                raise Exception("Erro de sintaxe")
+                            Parser.tokenizer.selProx()
+                            tipo = Parser.tokenizer.atual.valor
+                            if tipo == "Int":
+                                tipo = 2
+                            elif tipo == "Bool":
+                                tipo = True
+                            elif tipo == "String":
+                                tipo = "string"
+                            Parser.tokenizer.selProx()
+                            filho = [iden,tipo]
+                            filhosfunc.append(filho)
+                            while Parser.tokenizer.atual.tipo == "VIRGULA":
+                                Parser.tokenizer.selProx()
+                                iden = Parser.tokenizer.atual.valor
+                                Parser.tokenizer.selProx()
+                                if not Parser.tokenizer.atual.tipo == "EQUALVAR":
+                                    raise Exception("Erro de sintaxe")
+                                Parser.tokenizer.selProx()
+                                tipo = Parser.tokenizer.atual.valor
+                                if tipo == "Int":
+                                    tipo = 2
+                                elif tipo == "Bool":
+                                    tipo = True
+                                elif tipo == "String":
+                                    tipo = "string"
+                                Parser.tokenizer.selProx()
+                                filho = [iden,tipo]
+                                filhosfunc.append(filho)
+                        Parser.tokenizer.selProx()
+                        if not Parser.tokenizer.atual.tipo == "EQUALVAR":
+                            raise Exception("Erro de sintaxe")
+                        Parser.tokenizer.selProx()
+                        if Parser.tokenizer.atual.tipo in ["INTVAR","BOOLVAR","STRINGVAR"]:
+                            valor = Parser.tokenizer.atual.valor
+                            Parser.tokenizer.selProx()
+                            Parser.tokenizer.selProx()
+                            filhosfunc2 = []
+                        while not Parser.tokenizer.atual.tipo == "END":
+                            filhosfunc2.append(Parser.parseCommand())
+                            Parser.tokenizer.selProx()
+                        Parser.st2[identifier] = 0
+                        filhosfunc.append(Statements(0,filhosfunc2))
+                        result = FuncDec(identifier,filhosfunc)
+                        filhos.append(result)
+                        Parser.tokenizer.selProx()
         return Statements(0,filhos)
     def parseCommand():
         result = ""
@@ -281,6 +356,16 @@ class Parser:
                         Parser.tokenizer.selProx()
                 else:
                     result = BinOp("=",[identifier,Parser.parseRelExp()])
+            elif Parser.tokenizer.atual.tipo == "OPEN":
+                Parser.tokenizer.selProx()
+                filhos = []
+                if not Parser.tokenizer.atual.tipo == "CLOSE":
+                    filhos.append(Parser.parseRelExp())
+                    while Parser.tokenizer.atual.tipo == "VIRGULA":
+                        Parser.tokenizer.selProx()
+                        filhos.append(Parser.parseRelExp())
+                Parser.tokenizer.selProx()
+                result = FuncCall(identifier,filhos)
             else:
                 raise Exception("Erro de sintaxe")
 
@@ -323,6 +408,10 @@ class Parser:
                         valor = Parser.tokenizer.atual.valor
                         result = BinOp("::",[identifier,valor])
                         Parser.tokenizer.selProx()
+        elif Parser.tokenizer.atual.tipo == "RETURN":
+            Parser.tokenizer.selProx()
+            valor = Parser.parseRelExp()
+            result = Result(valor,valor)
 
         if Parser.tokenizer.atual.tipo in ["ENTER","EOF"]:
             if result == "":
@@ -409,8 +498,19 @@ class Parser:
                 raise Exception("Erro de sintaxe")
         elif Parser.tokenizer.atual.tipo == "IDEN":
             identifier = Parser.tokenizer.atual.valor
-            result = Identifier(identifier,[])
-            Parser.tokenizer.selProx()
+            Parser.tokenizer.selProx()  
+            if not Parser.tokenizer.atual.tipo == "OPEN":
+                result = Identifier(identifier,[])
+            else:
+                Parser.tokenizer.selProx()
+                filhos = []
+                if not Parser.tokenizer.atual.tipo == "CLOSE":
+                    filhos.append(Parser.parseRelExp())
+                    while Parser.tokenizer.atual.tipo == "VIRGULA":
+                        Parser.tokenizer.selProx()
+                        filhos.append(Parser.parseRelExp())
+                Parser.tokenizer.selProx()
+                result = FuncCall(identifier,filhos)
             return result
         else:
             raise Exception("Erro de sintaxe")
@@ -426,6 +526,7 @@ class Parser:
         if Parser.tokenizer.atual.tipo == "EOF":
             return result
         else:
+            print(Parser.tokenizer.atual.tipo)
             raise Exception("Erro de sintaxe")
                  
 
@@ -542,6 +643,41 @@ class IfOp(Node):
             self.children[1].Evaluate()
         else:
             self.children[2].Evaluate()
+        return
+
+class FuncDec(Node):
+    def Evaluate(self):
+        Parser.st2[self.value] = self
+        return
+
+class FuncCall(Node):
+    def Evaluate(self):
+        results = []
+        for i in self.children:
+            results.append(i.Evaluate())
+        stold = Parser.st
+        stnew = {}
+        stnew["function"] = None
+        Parser.st = stnew
+        func = Parser.st2[self.value]
+        if not len(self.children) == (len(func.children) - 1):
+            raise Exception("Número incorreto de filhos")
+        N = len(func.children)
+        for i in range(N-1):
+            iden = func.children[i][0]
+            tipo = func.children[i][1]
+            if not type(results[i]) == type(tipo):
+                raise Exception("Tipo de variável incorreto")
+            Parser.st[iden] = [results[i],type(results[i])]
+        N = N-1
+        func.children[N].Evaluate()
+        result = Parser.st["function"]
+        Parser.st = stold
+        return result
+            
+class Result(Node):
+    def Evaluate(self):
+        Parser.st["function"] = self.value.Evaluate()
         return
 
 def main():
