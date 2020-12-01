@@ -1,5 +1,4 @@
 import sys
-from shutil import copyfile
 
 argv = sys.argv[1:] #lista dos argumentos recebidos ao rodar o arquivo
 class PrePro:
@@ -193,6 +192,14 @@ class Tokenizer:
             prox = Token("FALSE",lido)
             self.atual = prox
             self.pos += 1
+        elif lido == "function":
+            prox = Token("FUNCTION",lido)
+            self.atual = prox
+            self.pos += 1
+        elif lido == "return":
+            prox = Token("RETURN",lido)
+            self.atual = prox
+            self.pos += 1
         elif lido[0].isalpha():
             for i in lido:
                 if i.isnumeric() or i.isalpha() or i == "_":
@@ -240,13 +247,17 @@ class Tokenizer:
             prox = Token("SMALLER",lido)
             self.atual = prox
             self.pos += 1
+        elif lido == ",":
+            prox = Token("VIRGULA",lido)
+            self.atual = prox
+            self.pos += 1
         else:
             raise Exception("Erro de gramática")
 
 class Parser:
     st = {}
-    valCount = 1
-    loopCount = 1
+    st["function"] = None
+    st2 = {}
 
     def loopif():
         Parser.tokenizer.selProx()
@@ -264,8 +275,69 @@ class Parser:
     def parseBlock():
         filhos = []
         while not Parser.tokenizer.atual.tipo in ["EOF","END","ELSE","ELSEIF"]:
-            filhos.append(Parser.parseCommand())
-            Parser.tokenizer.selProx()
+            if not Parser.tokenizer.atual.tipo == "FUNCTION":
+                filhos.append(Parser.parseCommand())
+                Parser.tokenizer.selProx()
+            else:
+                Parser.tokenizer.selProx()
+                if Parser.tokenizer.atual.tipo == "IDEN":
+                    identifier = Parser.tokenizer.atual.valor                    
+                    if identifier in Parser.st:
+                        raise Exception("Nome em uso")
+                    Parser.tokenizer.selProx()
+                    if Parser.tokenizer.atual.tipo == "OPEN":
+                        Parser.tokenizer.selProx()
+                        filhosfunc = []
+                        while not Parser.tokenizer.atual.tipo == "CLOSE":
+                            iden = Parser.tokenizer.atual.valor
+                            Parser.tokenizer.selProx()
+                            if not Parser.tokenizer.atual.tipo == "EQUALVAR":
+                                raise Exception("Erro de sintaxe")
+                            Parser.tokenizer.selProx()
+                            tipo = Parser.tokenizer.atual.valor
+                            if tipo == "Int":
+                                tipo = 2
+                            elif tipo == "Bool":
+                                tipo = True
+                            elif tipo == "String":
+                                tipo = "string"
+                            Parser.tokenizer.selProx()
+                            filho = [iden,tipo]
+                            filhosfunc.append(filho)
+                            while Parser.tokenizer.atual.tipo == "VIRGULA":
+                                Parser.tokenizer.selProx()
+                                iden = Parser.tokenizer.atual.valor
+                                Parser.tokenizer.selProx()
+                                if not Parser.tokenizer.atual.tipo == "EQUALVAR":
+                                    raise Exception("Erro de sintaxe")
+                                Parser.tokenizer.selProx()
+                                tipo = Parser.tokenizer.atual.valor
+                                if tipo == "Int":
+                                    tipo = 2
+                                elif tipo == "Bool":
+                                    tipo = True
+                                elif tipo == "String":
+                                    tipo = "string"
+                                Parser.tokenizer.selProx()
+                                filho = [iden,tipo]
+                                filhosfunc.append(filho)
+                        Parser.tokenizer.selProx()
+                        if not Parser.tokenizer.atual.tipo == "EQUALVAR":
+                            raise Exception("Erro de sintaxe")
+                        Parser.tokenizer.selProx()
+                        if Parser.tokenizer.atual.tipo in ["INTVAR","BOOLVAR","STRINGVAR"]:
+                            valor = Parser.tokenizer.atual.valor
+                            Parser.tokenizer.selProx()
+                            Parser.tokenizer.selProx()
+                            filhosfunc2 = []
+                        while not Parser.tokenizer.atual.tipo == "END":
+                            filhosfunc2.append(Parser.parseCommand())
+                            Parser.tokenizer.selProx()
+                        Parser.st2[identifier] = 0
+                        filhosfunc.append(Statements(0,filhosfunc2))
+                        result = FuncDec(identifier,filhosfunc)
+                        filhos.append(result)
+                        Parser.tokenizer.selProx()
         return Statements(0,filhos)
     def parseCommand():
         result = ""
@@ -284,6 +356,16 @@ class Parser:
                         Parser.tokenizer.selProx()
                 else:
                     result = BinOp("=",[identifier,Parser.parseRelExp()])
+            elif Parser.tokenizer.atual.tipo == "OPEN":
+                Parser.tokenizer.selProx()
+                filhos = []
+                if not Parser.tokenizer.atual.tipo == "CLOSE":
+                    filhos.append(Parser.parseRelExp())
+                    while Parser.tokenizer.atual.tipo == "VIRGULA":
+                        Parser.tokenizer.selProx()
+                        filhos.append(Parser.parseRelExp())
+                Parser.tokenizer.selProx()
+                result = FuncCall(identifier,filhos)
             else:
                 raise Exception("Erro de sintaxe")
 
@@ -326,6 +408,10 @@ class Parser:
                         valor = Parser.tokenizer.atual.valor
                         result = BinOp("::",[identifier,valor])
                         Parser.tokenizer.selProx()
+        elif Parser.tokenizer.atual.tipo == "RETURN":
+            Parser.tokenizer.selProx()
+            valor = Parser.parseRelExp()
+            result = Result(valor,valor)
 
         if Parser.tokenizer.atual.tipo in ["ENTER","EOF"]:
             if result == "":
@@ -412,8 +498,19 @@ class Parser:
                 raise Exception("Erro de sintaxe")
         elif Parser.tokenizer.atual.tipo == "IDEN":
             identifier = Parser.tokenizer.atual.valor
-            result = Identifier(identifier,[])
-            Parser.tokenizer.selProx()
+            Parser.tokenizer.selProx()  
+            if not Parser.tokenizer.atual.tipo == "OPEN":
+                result = Identifier(identifier,[])
+            else:
+                Parser.tokenizer.selProx()
+                filhos = []
+                if not Parser.tokenizer.atual.tipo == "CLOSE":
+                    filhos.append(Parser.parseRelExp())
+                    while Parser.tokenizer.atual.tipo == "VIRGULA":
+                        Parser.tokenizer.selProx()
+                        filhos.append(Parser.parseRelExp())
+                Parser.tokenizer.selProx()
+                result = FuncCall(identifier,filhos)
             return result
         else:
             raise Exception("Erro de sintaxe")
@@ -429,6 +526,7 @@ class Parser:
         if Parser.tokenizer.atual.tipo == "EOF":
             return result
         else:
+            print(Parser.tokenizer.atual.tipo)
             raise Exception("Erro de sintaxe")
                  
 
@@ -442,46 +540,31 @@ class Node:
 class BinOp(Node):
     def Evaluate(self):
         if self.value == "+":
-            self.children[0].Evaluate()
-            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
-            self.children[1].Evaluate()
-            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
-            Generator.lista.append("ADD EAX, EBX ; BinOp soma")
-            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
-            return
-
+            return self.children[0].Evaluate() + self.children[1].Evaluate()
         elif self.value == "-":
-            self.children[0].Evaluate()
-            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
-            self.children[1].Evaluate()
-            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
-            Generator.lista.append("SUB EAX, EBX ; BinOp subtracao")
-            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
-            return
-
+            return self.children[0].Evaluate() - self.children[1].Evaluate()
         elif self.value == "*":
-            self.children[0].Evaluate()
-            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
-            self.children[1].Evaluate()
-            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
-            Generator.lista.append("IMUL EAX, EBX ; BinOp multiplicacao")
-            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
-            return
-
+            eval0 = self.children[0].Evaluate()
+            eval1 = self.children[1].Evaluate()
+            if type(eval0) == type("string") or type(eval1) == type("string"):
+                if eval0 == True:
+                    eval0 = "true"
+                elif eval0 == False:
+                    eval0 = "false"
+                if eval1 == True:
+                    eval1 = "true"
+                elif eval1 == False:
+                    eval1 = "false"
+                return str(eval0) + str(eval1)
+            return eval0 * eval1
         elif self.value == "/":
-            self.children[0].Evaluate()
-            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
-            self.children[1].Evaluate()
-            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
-            Generator.lista.append("DIVSD EAX, EBX ; BinOp divisao")
-            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
-            return
-
+            return self.children[0].Evaluate() // self.children[1].Evaluate()
         elif self.value == "=":
-            self.children[1].Evaluate()
-            Generator.lista.append("MOV [EBP-" + str(Parser.st[self.children[0]][2]*4) + "], EBX ; salva resultado em EBX")
+            valor = self.children[1].Evaluate()
+            if not (type(Parser.st[self.children[0]][1]) == type(valor)):
+                raise Exception("Variável não é do tipo especificado")
+            Parser.st[self.children[0]][0] = valor
             return
-
         elif self.value == "::":
             valor = None
             if self.children[1] == "Int":
@@ -492,65 +575,21 @@ class BinOp(Node):
                 valor = "string"
             else:
                 raise Exception("Tipo de variável desconhecido")
-            Parser.st[self.children[0]] = [None,valor,Parser.valCount]
-            Parser.valCount += 1
-            Generator.lista.append("PUSH DWORD 0 ; alocacao " + self.children[0])
+            Parser.st[self.children[0]] = [None,valor]
             return
-
         elif self.value == "&&":
-            self.children[0].Evaluate()
-            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
-            self.children[1].Evaluate()
-            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
-            Generator.lista.append("AND EAX, EBX ; BinOp and")
-            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
-            return
-
+            return self.children[0].Evaluate() and self.children[1].Evaluate()
         elif self.value == "||":
-            self.children[0].Evaluate()
-            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
-            self.children[1].Evaluate()
-            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
-            Generator.lista.append("OR EAX, EBX ; BinOp or")
-            Generator.lista.append("MOV EBX, EAX ; salva resultado em EBX")
-            return
-
+            return self.children[0].Evaluate() or self.children[1].Evaluate()
         elif self.value == "==":
-            self.children[0].Evaluate()
-            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
-            self.children[1].Evaluate()
-            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
-            Generator.lista.append("CMP EAX, EBX ; BinOp ==")
-            Generator.lista.append("CALL binop_je")
-
+            return self.children[0].Evaluate() == self.children[1].Evaluate()
         elif self.value == ">":
-            self.children[0].Evaluate()
-            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
-            self.children[1].Evaluate()
-            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
-            Generator.lista.append("CMP EAX, EBX ; BinOp greater")
-            Generator.lista.append("CALL binop_jg")
-
+            return self.children[0].Evaluate() > self.children[1].Evaluate()
         elif self.value == "<":
-            self.children[0].Evaluate()
-            Generator.lista.append("PUSH EBX ; guarda filho da esquerda na pilha")
-            self.children[1].Evaluate()
-            Generator.lista.append("POP EAX ; puxa filho da esquerda para EAX")
-            Generator.lista.append("CMP EAX, EBX ; BinOp lesser")
-            Generator.lista.append("CALL binop_jl")
-
+            return self.children[0].Evaluate() < self.children[1].Evaluate()
         elif self.value == "while":
-            #lembrar de fazer cmp ebx false
-            #e je exit_numero
-            contador = Parser.loopCount
-            Generator.lista.append("LOOP_" + str(contador))
-            Parser.loopCount += 1
-            self.children[0].Evaluate()
-            Generator.lista.append("CMP EBX, FALSE")
-            Generator.lista.append("JE EXIT_" + str(contador))
-            self.children[1].Evaluate()
-            Generator.lista.append("JMP LOOP_" + str(contador))
-            Generator.lista.append("EXIT_" + str(contador))
+            while self.children[0].Evaluate():
+                self.children[1].Evaluate()
             return
         else:
             raise Exception("Erro de sintaxe")
@@ -559,18 +598,11 @@ class UnOp(Node):
     def Evaluate(self):
         if self.value == "-":
             return -(self.children[0].Evaluate())
-
         elif self.value == "+":
             return self.children[0].Evaluate()
-
         elif self.value == "println":
-            self.children[0].Evaluate()
-            Generator.lista.append("PUSH EBX")
-            Generator.lista.append("CALL print")
-            Generator.lista.append("POP EBX")
-            #print(self.children[0].Evaluate())
+            print(self.children[0].Evaluate())
             return
-
         elif self.value == "!":
             return not self.children[0].Evaluate()
         else:
@@ -579,9 +611,7 @@ class UnOp(Node):
 
 class IntVal(Node):
     def Evaluate(self):
-        result = self.value
-        Generator.lista.append("MOV EBX, " + str(result) + " ; IntVal")
-        return result
+        return self.value
 
 class StrVal(Node):
     def Evaluate(self):
@@ -589,9 +619,7 @@ class StrVal(Node):
 
 class BoolVal(Node):
     def Evaluate(self):
-        result = self.value
-        Generator.lista.append("MOV EBX, " + str(result) + " ; BoolVal")
-        return result
+        return self.value
 
 class NoOp(Node):
     def Evaluate(self):
@@ -607,38 +635,53 @@ class Statements(Node):
 
 class Identifier(Node):
     def Evaluate(self):
-        result = Parser.st[self.value][0]
-        Generator.lista.append("MOV EBX, [EBP-" + str(Parser.st[self.value][2]*4) + "] ; Identifier " + self.value)
-        return result
+        return Parser.st[self.value][0]
 
 class IfOp(Node):
     def Evaluate(self):
-        contador = Parser.loopCount
-        Generator.lista.append("IF_" + str(contador))
-        Parser.loopCount += 1
-        self.children[0].Evaluate()
-        Generator.lista.append("CMP EBX, FALSE")
-        Generator.lista.append("JE ELSE_" + str(contador))
-        self.children[1].Evaluate()
-        Generator.lista.append("ELSE_" + str(contador))
-        self.children[2].Evaluate()
+        if self.children[0].Evaluate():
+            self.children[1].Evaluate()
+        else:
+            self.children[2].Evaluate()
         return
 
-class Generator:
-    lista = []
-    def Run():
-        copyfile("predefs.txt","program.asm")
-        f = open("program.asm","a")
-        
-        for i in Generator.lista:
-            f.write(i+"\n")
-        f.close()
+class FuncDec(Node):
+    def Evaluate(self):
+        Parser.st2[self.value] = self
+        return
+
+class FuncCall(Node):
+    def Evaluate(self):
+        results = []
+        for i in self.children:
+            results.append(i.Evaluate())
+        stold = Parser.st
+        stnew = {}
+        stnew["function"] = None
+        Parser.st = stnew
+        func = Parser.st2[self.value]
+        if not len(self.children) == (len(func.children) - 1):
+            raise Exception("Número incorreto de filhos")
+        N = len(func.children)
+        for i in range(N-1):
+            iden = func.children[i][0]
+            tipo = func.children[i][1]
+            if not type(results[i]) == type(tipo):
+                raise Exception("Tipo de variável incorreto")
+            Parser.st[iden] = [results[i],type(results[i])]
+        N = N-1
+        func.children[N].Evaluate()
+        result = Parser.st["function"]
+        Parser.st = stold
+        return result
+            
+class Result(Node):
+    def Evaluate(self):
+        Parser.st["function"] = self.value.Evaluate()
         return
 
 def main():
     Parser.run().Evaluate()
-    Generator.Run()
-
     return
 
 if __name__ == "__main__":
