@@ -543,14 +543,14 @@ class BinOp(Node):
             #lembrar de fazer cmp ebx false
             #e je exit_numero
             contador = Parser.loopCount
-            Generator.lista.append("LOOP_" + str(contador))
+            Generator.lista.append("LOOP_" + str(contador) + ":")
             Parser.loopCount += 1
             self.children[0].Evaluate()
-            Generator.lista.append("CMP EBX, FALSE")
+            Generator.lista.append("CMP EBX, False")
             Generator.lista.append("JE EXIT_" + str(contador))
             self.children[1].Evaluate()
             Generator.lista.append("JMP LOOP_" + str(contador))
-            Generator.lista.append("EXIT_" + str(contador))
+            Generator.lista.append("EXIT_" + str(contador) + ":")
             return
         else:
             raise Exception("Erro de sintaxe")
@@ -614,23 +614,27 @@ class Identifier(Node):
 class IfOp(Node):
     def Evaluate(self):
         contador = Parser.loopCount
-        Generator.lista.append("IF_" + str(contador))
+        Generator.lista.append("IF_" + str(contador) + ":")
         Parser.loopCount += 1
         self.children[0].Evaluate()
         Generator.lista.append("CMP EBX, FALSE")
         Generator.lista.append("JE ELSE_" + str(contador))
         self.children[1].Evaluate()
-        Generator.lista.append("ELSE_" + str(contador))
+        Generator.lista.append("ELSE_" + str(contador) + ":")
         self.children[2].Evaluate()
         return
 
 class Generator:
     lista = []
+    predefExit = ["POP EBP","MOV EAX, 1","INT 0x80"]
     def Run():
         copyfile("predefs.txt","program.asm")
         f = open("program.asm","a")
         
         for i in Generator.lista:
+            f.write(i+"\n")
+        f.write("\n")
+        for i in Generator.predefExit:
             f.write(i+"\n")
         f.close()
         return
