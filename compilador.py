@@ -27,6 +27,9 @@ class PrePro:
                     pass
                 else:
                     raise Exception("Erro de gramática")
+                
+            if comment:
+                continue
 
             if string and (not char == '"'):
                 numero += char
@@ -520,6 +523,7 @@ class Parser:
         lista = []
         for linha in arquivo:
             lista += PrePro.filter(linha)
+        print(lista)
         Parser.tokenizer = Tokenizer(lista)
         Parser.tokenizer.selProx()
         result = Parser.parseBlock()
@@ -547,11 +551,11 @@ class BinOp(Node):
             eval0 = self.children[0].Evaluate()
             eval1 = self.children[1].Evaluate()
             if type(eval0) == type("string") or type(eval1) == type("string"):
-                if eval0 == True:
+                if (eval0 == True) and (type(eval0) == type(True)):
                     eval0 = "true"
                 elif eval0 == False:
                     eval0 = "false"
-                if eval1 == True:
+                if (eval1 == True) and (type(eval1) == type(True)):
                     eval1 = "true"
                 elif eval1 == False:
                     eval1 = "false"
@@ -639,7 +643,10 @@ class Identifier(Node):
 
 class IfOp(Node):
     def Evaluate(self):
-        if self.children[0].Evaluate():
+        teste = self.children[0].Evaluate()
+        if type(teste) == type("string"):
+            raise Exception("Condição inválida")
+        if (type(teste) == type(True) or (teste == 1)):
             self.children[1].Evaluate()
         else:
             self.children[2].Evaluate()
